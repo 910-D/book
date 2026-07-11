@@ -60,6 +60,13 @@
     background: var(--fg); color: var(--bg); border-color: var(--fg);
   }
 
+  .backup-row { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .backup-btn {
+    border: 1px solid var(--line); background: transparent; color: var(--dim);
+    font-size: 11.5px; padding: 6px 10px; cursor: pointer;
+  }
+  .backup-btn:active { border-color: var(--fg); color: var(--fg); }
+
   .list-header {
     display: flex; align-items: center; justify-content: space-between;
     margin-bottom: 10px;
@@ -197,15 +204,29 @@
   };
 
   let lastFailedSave = null; // 실패한 저장을 다시 시도할 함수
+  let entriesCache = {}; // bookId -> entries[], 세션 중 백업용 캐시
+  let autoRetryTimer = null;
 
   function setState(patch) {
     state = Object.assign({}, state, patch);
     render();
+    manageAutoRetry();
+  }
+
+  function manageAutoRetry() {
+    if (state.saveError && lastFailedSave) {
+      if (!autoRetryTimer) {
+        autoRetryTimer = setInterval(() => { if (lastFailedSave) lastFailedSave(); }, 7000);
+      }
+    } else if (autoRetryTimer) {
+      clearInterval(autoRetryTimer);
+      autoRetryTimer = null;
+    }
   }
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-  async function withRetry(fn, retries = 2, delay = 500) {
+  async function withRetry(fn, retries = 3, delay = 700) {
     let lastErr;
     for (let i = 0; i <= retries; i++) {
       try { return await fn(); }
@@ -228,23 +249,26 @@
     } catch (e) {
       console.error('저장 실패', e);
       lastFailedSave = () => saveBooks(books);
-      setState({ saveError: '책 목록 저장에 실패했어요. 서버 연결을 확인해주세요.' });
+      setState({ saveError: '책 목록 저장에 실패했어요. 서버 연결을 확인해주세요. (아래 "백업 파일로 저장"으로 데이터는 지켜두세요)' });
     }
   }
   async function loadEntries(bookId) {
     try {
       const res = await window.storage.get('entries:' + bookId, false);
-      return res && res.value ? JSON.parse(res.value) : [];
-    } catch (e) { return []; }
+      const entries = res && res.value ? JSON.parse(res.value) : [];
+      entriesCache[bookId] = entries;
+      return entries;
+    } catch (e) { return entriesCache[bookId] || []; }
   }
   async function saveEntries(bookId, entries) {
+    entriesCache[bookId] = entries;
     try {
       await withRetry(() => window.storage.set('entries:' + bookId, JSON.stringify(entries), false));
       if (state.saveError) setState({ saveError: null });
     } catch (e) {
       console.error('저장 실패', e);
       lastFailedSave = () => saveEntries(bookId, entries);
-      setState({ saveError: '기록 저장에 실패했어요. 서버 연결을 확인해주세요.' });
+      setState({ saveError: '기록 저장에 실패했어요. 서버 연결을 확인해주세요. (아래 "백업 파일로 저장"으로 데이터는 지켜두세요)' });
     }
   }
 
@@ -252,6 +276,40 @@
     const books = await loadBooks();
     setState({ loading: false, books });
   })();
+
+  // ---- 백업 (내보내기/가져오기) ----
+  function exportBackup() {
+    const data = { books: state.books, entries: entriesCache, exportedAt: new Date().toISOString() };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'pilsa-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function importBackup(file) {
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const data = JSON.parse(reader.result);
+        const books = Array.isArray(data.books) ? data.books : [];
+        const entries = data.entries && typeof data.entries === 'object' ? data.entries : {};
+        entriesCache = Object.assign({}, entriesCache, entries);
+        setState({ books, saveError: null });
+        await saveBooks(books);
+        for (const bookId of Object.keys(entries)) {
+          await saveEntries(bookId, entries[bookId]);
+        }
+      } catch (e) {
+        setState({ saveError: '백업 파일을 읽지 못했어요. 파일 형식을 확인해주세요.' });
+      }
+    };
+    reader.readAsText(file);
+  }
 
   // ---- 액션 ----
   async function addBook(title, author) {
@@ -325,6 +383,12 @@
 
     root.innerHTML = `
       <h1>필사 기록</h1>
+
+      <div class="backup-row">
+        <button class="backup-btn" id="exportBtn">백업 파일로 저장</button>
+        <button class="backup-btn" id="importBtn">백업 파일 불러오기</button>
+        <input type="file" id="importFile" accept="application/json" style="display:none" />
+      </div>
 
       <div class="chosung-row">${chosungButtons}</div>
 
@@ -405,6 +469,20 @@
     if (retryBtn) retryBtn.onclick = () => { if (lastFailedSave) lastFailedSave(); };
     const dismissBtn = root.querySelector('#dismissSave');
     if (dismissBtn) dismissBtn.onclick = () => setState({ saveError: null });
+
+    const exportBtn = root.querySelector('#exportBtn');
+    if (exportBtn) exportBtn.onclick = exportBackup;
+
+    const importBtn = root.querySelector('#importBtn');
+    const importFile = root.querySelector('#importFile');
+    if (importBtn && importFile) {
+      importBtn.onclick = () => importFile.click();
+      importFile.onchange = (ev) => {
+        const file = ev.target.files && ev.target.files[0];
+        if (file) importBackup(file);
+        importFile.value = '';
+      };
+    }
 
     root.querySelectorAll('.chosung-btn').forEach(btn => {
       btn.onclick = () => setState({ activeFilter: btn.dataset.filter });
