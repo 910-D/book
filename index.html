@@ -1,0 +1,467 @@
+<div id="app"></div>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #000000;
+    min-height: 100%;
+  }
+  #app {
+    --bg: #000000;
+    --fg: #ffffff;
+    --line: #444444;
+    --dim: #999999;
+    font-family: -apple-system, 'Noto Sans KR', sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    min-height: 100vh;
+    box-sizing: border-box;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 16px 14px 60px;
+  }
+  #app * { box-sizing: border-box; }
+
+  @media (min-width: 700px) {
+    #app { max-width: 720px; padding: 32px 24px 80px; }
+    h1 { font-size: 22px; }
+    .chosung-row { grid-template-columns: repeat(10, 1fr); }
+    .chosung-btn { font-size: 16px; }
+    .book-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .entry-form { flex-direction: row; align-items: flex-start; }
+    .entry-form .row { flex-shrink: 0; }
+    .entry-form textarea { min-height: 40px; }
+    .entry-form button { flex-shrink: 0; }
+  }
+
+  h1 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 4px 0 16px;
+  }
+
+  /* 초성 필터: 5열, 정사각형 동일 크기 */
+  .chosung-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+    margin-bottom: 18px;
+  }
+  .chosung-btn {
+    aspect-ratio: 1;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--line);
+    background: transparent;
+    font-size: 15px;
+    color: var(--fg);
+    cursor: pointer;
+  }
+  .chosung-btn.active {
+    background: var(--fg); color: var(--bg); border-color: var(--fg);
+  }
+
+  .list-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .list-title { font-size: 13px; color: var(--dim); }
+  .add-btn {
+    border: 1px solid var(--fg); background: transparent; color: var(--fg);
+    font-size: 13px; padding: 8px 12px; cursor: pointer;
+  }
+
+  .new-book-form {
+    border: 1px solid var(--line);
+    padding: 12px; margin-bottom: 14px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .new-book-form input {
+    border: none; border-bottom: 1px solid var(--line);
+    background: transparent; padding: 8px 2px; font-size: 15px; color: var(--fg);
+  }
+  .new-book-form input::placeholder { color: var(--dim); }
+  .new-book-form input:focus { outline: none; border-color: var(--fg); }
+  .new-book-form button {
+    align-self: flex-end;
+    background: var(--fg); color: var(--bg); border: none;
+    font-size: 13px; padding: 8px 14px; cursor: pointer;
+  }
+
+  .book-list { display: flex; flex-direction: column; gap: 8px; }
+  .book-card {
+    border: 1px solid var(--line);
+    padding: 12px 14px;
+    cursor: pointer;
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  }
+  .book-card .title { font-size: 15px; font-weight: 500; }
+  .book-card .author { font-size: 12px; color: var(--dim); margin-top: 2px; }
+  .book-card .arrow { color: var(--dim); font-size: 14px; }
+  .book-card .right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .book-del { background: none; border: 1px solid var(--line); color: var(--fg); font-size: 14px; cursor: pointer; padding: 4px 8px; line-height: 1; white-space: nowrap; }
+  .book-del:active { background: var(--fg); color: var(--bg); }
+  .book-del.confirm { border-color: var(--fg); font-size: 12px; padding: 6px 10px; }
+
+  .empty {
+    text-align: center; color: var(--dim); font-size: 13px;
+    padding: 32px 0; border: 1px solid var(--line);
+  }
+
+  /* 상세 화면 */
+  .back-btn {
+    background: none; border: none; color: var(--dim); font-size: 13px;
+    cursor: pointer; padding: 0; margin-bottom: 14px;
+  }
+  .back-btn:active { color: var(--fg); }
+  .detail-title { font-size: 18px; font-weight: 600; }
+  .detail-author { font-size: 12px; color: var(--dim); margin: 3px 0 16px; }
+
+  .entry-form { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+  .entry-form .row { display: flex; gap: 8px; }
+  .entry-form .page-input {
+    width: 64px; flex-shrink: 0;
+    border: 1px solid var(--line); background: transparent; color: var(--fg);
+    padding: 9px 6px; text-align: center; font-size: 14px;
+  }
+  .entry-form textarea {
+    flex: 1; border: 1px solid var(--line); background: transparent; color: var(--fg);
+    padding: 9px 10px; font-size: 15px; line-height: 1.6;
+    resize: vertical; min-height: 44px;
+  }
+  .entry-form input::placeholder, .entry-form textarea::placeholder { color: var(--dim); }
+  .entry-form input:focus, .entry-form textarea:focus { outline: none; border-color: var(--fg); }
+  .entry-form button {
+    background: var(--fg); color: var(--bg); border: none;
+    padding: 10px 14px; font-size: 14px; cursor: pointer;
+  }
+
+  .entry-list { display: flex; flex-direction: column; }
+  .entry-row {
+    display: flex; gap: 10px; padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .entry-page { flex-shrink: 0; width: 40px; font-size: 12px; color: var(--dim); padding-top: 2px; }
+  .entry-content { font-size: 15px; line-height: 1.7; white-space: pre-wrap; flex: 1; }
+  .entry-del { flex-shrink: 0; background: none; border: none; color: var(--line); font-size: 13px; cursor: pointer; }
+
+  .loading { text-align: center; color: var(--dim); font-size: 13px; padding: 32px 0; }
+
+  .save-error {
+    border: 1px solid var(--fg);
+    padding: 10px 12px;
+    margin-bottom: 14px;
+    font-size: 12.5px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .save-error span { flex: 1; line-height: 1.5; }
+  .save-error .actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .save-error button {
+    background: none; border: 1px solid var(--line); color: var(--fg);
+    font-size: 12px; padding: 5px 8px; cursor: pointer;
+  }
+  .save-error button.retry { border-color: var(--fg); }
+</style>
+
+<script>
+(function () {
+  const root = document.getElementById('app');
+
+  // ---- 초성 유틸 ----
+  const CHO = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+  const NORMALIZE = { 'ㄲ':'ㄱ','ㄸ':'ㄷ','ㅃ':'ㅂ','ㅆ':'ㅅ','ㅉ':'ㅈ' };
+  const FILTER_LIST = ['전체','ㄱ','ㄴ','ㄷ','ㄹ','ㅁ','ㅂ','ㅅ','ㅇ','ㅈ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+
+  function getChosung(title) {
+    if (!title) return null;
+    const code = title.trim().charCodeAt(0);
+    if (code < 0xAC00 || code > 0xD7A3) return null;
+    const cho = CHO[Math.floor((code - 0xAC00) / 588)];
+    return NORMALIZE[cho] || cho;
+  }
+
+  // ---- 상태 ----
+  let state = {
+    loading: true,
+    books: [],
+    activeFilter: '전체',
+    showNewBookForm: false,
+    view: 'list',
+    currentBookId: null,
+    entries: [],
+    entriesLoading: false,
+    confirmingDelete: null,
+    saveError: null,
+  };
+
+  let lastFailedSave = null; // 실패한 저장을 다시 시도할 함수
+
+  function setState(patch) {
+    state = Object.assign({}, state, patch);
+    render();
+  }
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  async function withRetry(fn, retries = 2, delay = 500) {
+    let lastErr;
+    for (let i = 0; i <= retries; i++) {
+      try { return await fn(); }
+      catch (e) { lastErr = e; if (i < retries) await sleep(delay * (i + 1)); }
+    }
+    throw lastErr;
+  }
+
+  // ---- 저장소 ----
+  async function loadBooks() {
+    try {
+      const res = await window.storage.get('books', false);
+      return res && res.value ? JSON.parse(res.value) : [];
+    } catch (e) { return []; }
+  }
+  async function saveBooks(books) {
+    try {
+      await withRetry(() => window.storage.set('books', JSON.stringify(books), false));
+      if (state.saveError) setState({ saveError: null });
+    } catch (e) {
+      console.error('저장 실패', e);
+      lastFailedSave = () => saveBooks(books);
+      setState({ saveError: '책 목록 저장에 실패했어요. 서버 연결을 확인해주세요.' });
+    }
+  }
+  async function loadEntries(bookId) {
+    try {
+      const res = await window.storage.get('entries:' + bookId, false);
+      return res && res.value ? JSON.parse(res.value) : [];
+    } catch (e) { return []; }
+  }
+  async function saveEntries(bookId, entries) {
+    try {
+      await withRetry(() => window.storage.set('entries:' + bookId, JSON.stringify(entries), false));
+      if (state.saveError) setState({ saveError: null });
+    } catch (e) {
+      console.error('저장 실패', e);
+      lastFailedSave = () => saveEntries(bookId, entries);
+      setState({ saveError: '기록 저장에 실패했어요. 서버 연결을 확인해주세요.' });
+    }
+  }
+
+  (async function init() {
+    const books = await loadBooks();
+    setState({ loading: false, books });
+  })();
+
+  // ---- 액션 ----
+  async function addBook(title, author) {
+    const book = { id: 'b' + Date.now(), title: title.trim(), author: author.trim(), createdAt: Date.now() };
+    const books = [book, ...state.books];
+    setState({ books, showNewBookForm: false });
+    await saveBooks(books);
+  }
+
+  async function openBook(bookId) {
+    setState({ view: 'detail', currentBookId: bookId, entriesLoading: true, entries: [] });
+    const entries = await loadEntries(bookId);
+    entries.sort((a, b) => (Number(a.page) || 0) - (Number(b.page) || 0));
+    setState({ entries, entriesLoading: false });
+  }
+
+  async function deleteBook(bookId) {
+    const books = state.books.filter(b => b.id !== bookId);
+    setState({ books });
+    await saveBooks(books);
+    try { await window.storage.delete('entries:' + bookId, false); } catch (e) { /* 이미 없거나 실패 시 무시 */ }
+  }
+
+  function backToList() {
+    setState({ view: 'list', currentBookId: null, entries: [] });
+  }
+
+  async function addEntry(bookId, page, content) {
+    const entry = { id: 'e' + Date.now(), page: page.trim(), content: content.trim(), createdAt: Date.now() };
+    const entries = [...state.entries, entry].sort((a, b) => (Number(a.page) || 0) - (Number(b.page) || 0));
+    setState({ entries });
+    await saveEntries(bookId, entries);
+  }
+
+  async function deleteEntry(bookId, entryId) {
+    const entries = state.entries.filter(e => e.id !== entryId);
+    setState({ entries });
+    await saveEntries(bookId, entries);
+  }
+
+  // ---- 렌더 ----
+  function render() {
+    if (state.loading) {
+      root.innerHTML = `<div class="loading">불러오는 중…</div>`;
+      return;
+    }
+    if (state.view === 'detail') renderDetail();
+    else renderList();
+    if (state.saveError) {
+      root.insertAdjacentHTML('afterbegin', `
+        <div class="save-error">
+          <span>⚠ ${escapeHtml(state.saveError)}</span>
+          <div class="actions">
+            <button class="retry" id="retrySave">다시 시도</button>
+            <button id="dismissSave">닫기</button>
+          </div>
+        </div>
+      `);
+    }
+    bindEvents();
+  }
+
+  function renderList() {
+    const filtered = state.activeFilter === '전체'
+      ? state.books
+      : state.books.filter(b => getChosung(b.title) === state.activeFilter);
+
+    const chosungButtons = FILTER_LIST.map(c =>
+      `<button class="chosung-btn${state.activeFilter === c ? ' active' : ''}" data-filter="${c}">${c === '전체' ? '전체' : c}</button>`
+    ).join('');
+
+    root.innerHTML = `
+      <h1>필사 기록</h1>
+
+      <div class="chosung-row">${chosungButtons}</div>
+
+      <div class="list-header">
+        <div class="list-title">책 목록 (${filtered.length})</div>
+        <button class="add-btn" id="toggleNewBook">${state.showNewBookForm ? '닫기' : '+ 새 책'}</button>
+      </div>
+
+      ${state.showNewBookForm ? `
+        <div class="new-book-form">
+          <input id="newTitle" type="text" placeholder="책 제목" autocomplete="off" />
+          <input id="newAuthor" type="text" placeholder="지은이 (선택)" autocomplete="off" />
+          <button id="submitNewBook">추가하기</button>
+        </div>
+      ` : ''}
+
+      ${filtered.length === 0
+        ? `<div class="empty">${state.books.length === 0 ? '아직 등록된 책이 없어요.' : '해당 초성으로 시작하는 책이 없어요.'}</div>`
+        : `<div class="book-list">
+            ${filtered.map(b => `
+              <div class="book-card" data-book="${b.id}">
+                <div>
+                  <div class="title">${escapeHtml(b.title)}</div>
+                  ${b.author ? `<div class="author">${escapeHtml(b.author)}</div>` : ''}
+                </div>
+                <div class="right">
+                  <button class="book-del${state.confirmingDelete === b.id ? ' confirm' : ''}" data-bookdel="${b.id}">${state.confirmingDelete === b.id ? '삭제할까요?' : '✕'}</button>
+                  <div class="arrow">›</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>`
+      }
+    `;
+  }
+
+  function renderDetail() {
+    const book = state.books.find(b => b.id === state.currentBookId);
+    if (!book) { setState({ view: 'list' }); return; }
+
+    root.innerHTML = `
+      <button class="back-btn" id="backBtn">← 목록으로</button>
+      <div class="detail-title">${escapeHtml(book.title)}</div>
+      ${book.author ? `<div class="detail-author">${escapeHtml(book.author)}</div>` : '<div style="margin-bottom:16px"></div>'}
+
+      <div class="entry-form">
+        <div class="row">
+          <input class="page-input" id="pageInput" type="text" placeholder="쪽수" autocomplete="off" inputmode="numeric" />
+        </div>
+        <textarea id="contentInput" rows="2" placeholder="옮겨 적을 문장을 입력하세요"></textarea>
+        <button id="addEntryBtn">기록 추가</button>
+      </div>
+
+      <div class="entry-list">
+        ${state.entriesLoading
+          ? `<div class="loading">불러오는 중…</div>`
+          : state.entries.length === 0
+            ? `<div class="empty">아직 기록이 없어요.</div>`
+            : state.entries.map(e => `
+                <div class="entry-row" data-entry="${e.id}">
+                  <div class="entry-page">${escapeHtml(e.page)}p.</div>
+                  <div class="entry-content">${escapeHtml(e.content)}</div>
+                  <button class="entry-del" data-del="${e.id}">✕</button>
+                </div>
+              `).join('')
+        }
+      </div>
+    `;
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+  }
+
+  function bindEvents() {
+    const retryBtn = root.querySelector('#retrySave');
+    if (retryBtn) retryBtn.onclick = () => { if (lastFailedSave) lastFailedSave(); };
+    const dismissBtn = root.querySelector('#dismissSave');
+    if (dismissBtn) dismissBtn.onclick = () => setState({ saveError: null });
+
+    root.querySelectorAll('.chosung-btn').forEach(btn => {
+      btn.onclick = () => setState({ activeFilter: btn.dataset.filter });
+    });
+
+    const toggleBtn = root.querySelector('#toggleNewBook');
+    if (toggleBtn) toggleBtn.onclick = () => setState({ showNewBookForm: !state.showNewBookForm });
+
+    const submitBtn = root.querySelector('#submitNewBook');
+    if (submitBtn) submitBtn.onclick = () => {
+      const title = root.querySelector('#newTitle').value;
+      const author = root.querySelector('#newAuthor').value;
+      if (!title.trim()) { root.querySelector('#newTitle').focus(); return; }
+      addBook(title, author);
+    };
+
+    root.querySelectorAll('.book-card').forEach(card => {
+      card.onclick = () => openBook(card.dataset.book);
+    });
+
+    root.querySelectorAll('[data-bookdel]').forEach(btn => {
+      btn.onclick = (ev) => {
+        ev.stopPropagation();
+        const id = btn.dataset.bookdel;
+        if (state.confirmingDelete === id) {
+          deleteBook(id);
+          setState({ confirmingDelete: null });
+        } else {
+          setState({ confirmingDelete: id });
+        }
+      };
+    });
+
+    const backBtn = root.querySelector('#backBtn');
+    if (backBtn) backBtn.onclick = backToList;
+
+    const addEntryBtn = root.querySelector('#addEntryBtn');
+    if (addEntryBtn) addEntryBtn.onclick = () => {
+      const pageInput = root.querySelector('#pageInput');
+      const contentInput = root.querySelector('#contentInput');
+      const page = pageInput.value;
+      const content = contentInput.value;
+      if (!content.trim()) { contentInput.focus(); return; }
+      addEntry(state.currentBookId, page || '-', content);
+      pageInput.value = '';
+      contentInput.value = '';
+      pageInput.focus();
+    };
+
+    root.querySelectorAll('[data-del]').forEach(btn => {
+      btn.onclick = (ev) => {
+        ev.stopPropagation();
+        deleteEntry(state.currentBookId, btn.dataset.del);
+      };
+    });
+  }
+
+  render();
+})();
+</script>
